@@ -6,22 +6,19 @@ on:
   push:
     branches: [main]
 
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Baixar projeto
+      - name: Baixar repositório
         uses: actions/checkout@v4
 
-      - name: Configurar Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-          cache: maven
-
-      - name: Criar estrutura
+      - name: Criar projeto Java
+        shell: bash
         run: |
           mkdir -p src/main/java/app
 
@@ -33,25 +30,11 @@ jobs:
             <groupId>app</groupId>
             <artifactId>janelas</artifactId>
             <version>1.0</version>
-
             <properties>
               <maven.compiler.release>21</maven.compiler.release>
               <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
             </properties>
-
             <dependencies>
-              <dependency>
-                <groupId>org.openjfx</groupId>
-                <artifactId>javafx-base</artifactId>
-                <version>21.0.2</version>
-                <classifier>win</classifier>
-              </dependency>
-              <dependency>
-                <groupId>org.openjfx</groupId>
-                <artifactId>javafx-graphics</artifactId>
-                <version>21.0.2</version>
-                <classifier>win</classifier>
-              </dependency>
               <dependency>
                 <groupId>org.openjfx</groupId>
                 <artifactId>javafx-controls</artifactId>
@@ -64,14 +47,7 @@ jobs:
                 <version>21.0.2</version>
                 <classifier>win</classifier>
               </dependency>
-              <dependency>
-                <groupId>org.openjfx</groupId>
-                <artifactId>javafx-media</artifactId>
-                <version>21.0.2</version>
-                <classifier>win</classifier>
-              </dependency>
             </dependencies>
-
             <build>
               <finalName>JanelasIndependentes</finalName>
               <plugins>
@@ -144,11 +120,8 @@ jobs:
                   stage.initStyle(StageStyle.UNDECORATED);
                   stage.setScene(scene);
                   stage.setResizable(false);
-
-                  // Impede o fechamento pelas opções normais da janela.
                   stage.setOnCloseRequest(event -> event.consume());
 
-                  // Ctrl+C encerra todas as janelas.
                   scene.addEventFilter(KeyEvent.KEY_PRESSED, event -> {
                       if (event.isControlDown() &&
                           event.getCode() == KeyCode.C) {
@@ -160,78 +133,57 @@ jobs:
                   stage.show();
               }
 
-              private ImageView image(String url, double width) {
-                  ImageView view = new ImageView(
-                      new Image(url, true)
-                  );
-                  view.setFitWidth(width);
+              private ImageView image(String url) {
+                  ImageView view = new ImageView(new Image(url, true));
+                  view.setFitWidth(420);
                   view.setFitHeight(300);
                   view.setPreserveRatio(false);
-                  view.setSmooth(true);
                   return view;
               }
 
               private void createWindows() {
                   for (int i = 0; i < 3; i++) {
                       Stage stage = new Stage();
-
                       StackPane root = new StackPane();
 
                       if (i < 2) {
-                          root.getChildren().add(
-                              image(IMAGES[i], 420)
-                          );
+                          root.getChildren().add(image(IMAGES[i]));
                       } else {
-                          HBox gallery = new HBox(
-                              image(IMAGES[2], 210),
-                              image(IMAGES[3], 210)
+                          root.getChildren().add(
+                              new HBox(image(IMAGES[2]), image(IMAGES[3]))
                           );
-                          root.getChildren().add(gallery);
                       }
 
-                      Scene scene = new Scene(root, 420, 300);
-
-                      configure(stage, scene);
-
+                      configure(stage, new Scene(root, 420, 300));
                       stage.setX(80 + i * 450);
                       stage.setY(100);
                   }
               }
 
               private void startVideo() {
-                  Stage hiddenStage = new Stage();
-                  hiddenStage.initStyle(StageStyle.UNDECORATED);
-
+                  Stage videoStage = new Stage();
                   WebView browser = new WebView();
-                  browser.setPrefSize(640, 360);
 
                   String html =
                       "<html><body style='margin:0;background:black'>" +
                       "<iframe width='640' height='360' " +
                       "src='https://www.youtube.com/embed/T02bc6-QMB8" +
                       "?autoplay=1&controls=0&loop=1" +
-                      "&playlist=T02bc6-QMB8&playsinline=1' " +
-                      "allow='autoplay; encrypted-media; picture-in-picture' " +
+                      "&playlist=T02bc6-QMB8' " +
+                      "allow='autoplay; encrypted-media' " +
                       "frameborder='0'></iframe></body></html>";
 
                   browser.getEngine().loadContent(html);
-
-                  hiddenStage.setScene(
-                      new Scene(browser, 640, 360)
-                  );
-
-                  // Janela do vídeo fora da área visível.
-                  hiddenStage.setX(-10000);
-                  hiddenStage.setY(-10000);
-                  hiddenStage.show();
-
-                  hiddenStage.setOnCloseRequest(
-                      event -> event.consume()
-                  );
+                  videoStage.initStyle(StageStyle.UNDECORATED);
+                  videoStage.setScene(new Scene(browser, 640, 360));
+                  videoStage.setX(-10000);
+                  videoStage.setY(-10000);
+                  videoStage.setOnCloseRequest(event -> event.consume());
+                  videoStage.show();
               }
 
               @Override
-              public void start(Stage primaryStage) {
+              public void start(Stage stage) {
                   createWindows();
                   startVideo();
               }
@@ -242,10 +194,23 @@ jobs:
           }
           EOF
 
-      - name: Compilar JAR
-        run: mvn clean package
+          echo "Arquivos criados:"
+          ls -la pom.xml src/main/java/app/Main.java
 
-      - name: Disponibilizar JAR
+      - name: Configurar Java 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Verificar Maven
+        run: mvn --version
+
+      - name: Compilar
+        run: mvn -B clean package
+
+      - name: Enviar JAR
         uses: actions/upload-artifact@v4
         with:
           name: JanelasIndependentes-Windows
