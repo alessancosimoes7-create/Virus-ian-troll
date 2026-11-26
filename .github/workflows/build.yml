@@ -1,0 +1,253 @@
+
+name: Gerar JAR Windows
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Baixar projeto
+        uses: actions/checkout@v4
+
+      - name: Configurar Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Criar estrutura
+        run: |
+          mkdir -p src/main/java/app
+
+          cat > pom.xml <<'EOF'
+          <project xmlns="http://maven.apache.org/POM/4.0.0"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+            <modelVersion>4.0.0</modelVersion>
+            <groupId>app</groupId>
+            <artifactId>janelas</artifactId>
+            <version>1.0</version>
+
+            <properties>
+              <maven.compiler.release>21</maven.compiler.release>
+              <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+            </properties>
+
+            <dependencies>
+              <dependency>
+                <groupId>org.openjfx</groupId>
+                <artifactId>javafx-base</artifactId>
+                <version>21.0.2</version>
+                <classifier>win</classifier>
+              </dependency>
+              <dependency>
+                <groupId>org.openjfx</groupId>
+                <artifactId>javafx-graphics</artifactId>
+                <version>21.0.2</version>
+                <classifier>win</classifier>
+              </dependency>
+              <dependency>
+                <groupId>org.openjfx</groupId>
+                <artifactId>javafx-controls</artifactId>
+                <version>21.0.2</version>
+                <classifier>win</classifier>
+              </dependency>
+              <dependency>
+                <groupId>org.openjfx</groupId>
+                <artifactId>javafx-web</artifactId>
+                <version>21.0.2</version>
+                <classifier>win</classifier>
+              </dependency>
+              <dependency>
+                <groupId>org.openjfx</groupId>
+                <artifactId>javafx-media</artifactId>
+                <version>21.0.2</version>
+                <classifier>win</classifier>
+              </dependency>
+            </dependencies>
+
+            <build>
+              <finalName>JanelasIndependentes</finalName>
+              <plugins>
+                <plugin>
+                  <groupId>org.apache.maven.plugins</groupId>
+                  <artifactId>maven-compiler-plugin</artifactId>
+                  <version>3.13.0</version>
+                </plugin>
+                <plugin>
+                  <groupId>org.apache.maven.plugins</groupId>
+                  <artifactId>maven-shade-plugin</artifactId>
+                  <version>3.5.3</version>
+                  <executions>
+                    <execution>
+                      <phase>package</phase>
+                      <goals><goal>shade</goal></goals>
+                      <configuration>
+                        <createDependencyReducedPom>false</createDependencyReducedPom>
+                        <transformers>
+                          <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                            <mainClass>app.Main</mainClass>
+                          </transformer>
+                        </transformers>
+                        <filters>
+                          <filter>
+                            <artifact>*:*</artifact>
+                            <excludes>
+                              <exclude>META-INF/*.SF</exclude>
+                              <exclude>META-INF/*.DSA</exclude>
+                              <exclude>META-INF/*.RSA</exclude>
+                              <exclude>module-info.class</exclude>
+                            </excludes>
+                          </filter>
+                        </filters>
+                      </configuration>
+                    </execution>
+                  </executions>
+                </plugin>
+              </plugins>
+            </build>
+          </project>
+          EOF
+
+          cat > src/main/java/app/Main.java <<'EOF'
+          package app;
+
+          import javafx.application.Application;
+          import javafx.application.Platform;
+          import javafx.scene.Scene;
+          import javafx.scene.image.Image;
+          import javafx.scene.image.ImageView;
+          import javafx.scene.layout.HBox;
+          import javafx.scene.layout.StackPane;
+          import javafx.scene.web.WebView;
+          import javafx.stage.Stage;
+          import javafx.stage.StageStyle;
+          import javafx.scene.input.KeyCode;
+          import javafx.scene.input.KeyEvent;
+
+          public class Main extends Application {
+
+              private static final String[] IMAGES = {
+                  "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRePZwznOs6wE1oUYJ2WFjMdgbmGYWO5WTKlqZp4AJcsVz-ceLXFmMJJg2W&s=10",
+                  "https://i.pinimg.com/236x/9f/f8/d4/9ff8d492b22b11ebe2751257f1e3f7cb.jpg",
+                  "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQylviA73Ck2-geFMAmT5__eEwS-l6ayvu5g5gFusdX-g&s=10",
+                  "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTk08kHAZnEOIr_sXmQ5Gchv8DCDhZcOS1nz1hoExUobw&s=10"
+              };
+
+              private void configure(Stage stage, Scene scene) {
+                  stage.initStyle(StageStyle.UNDECORATED);
+                  stage.setScene(scene);
+                  stage.setResizable(false);
+
+                  // Impede o fechamento pelas opções normais da janela.
+                  stage.setOnCloseRequest(event -> event.consume());
+
+                  // Ctrl+C encerra todas as janelas.
+                  scene.addEventFilter(KeyEvent.KEY_PRESSED, event -> {
+                      if (event.isControlDown() &&
+                          event.getCode() == KeyCode.C) {
+                          Platform.exit();
+                          event.consume();
+                      }
+                  });
+
+                  stage.show();
+              }
+
+              private ImageView image(String url, double width) {
+                  ImageView view = new ImageView(
+                      new Image(url, true)
+                  );
+                  view.setFitWidth(width);
+                  view.setFitHeight(300);
+                  view.setPreserveRatio(false);
+                  view.setSmooth(true);
+                  return view;
+              }
+
+              private void createWindows() {
+                  for (int i = 0; i < 3; i++) {
+                      Stage stage = new Stage();
+
+                      StackPane root = new StackPane();
+
+                      if (i < 2) {
+                          root.getChildren().add(
+                              image(IMAGES[i], 420)
+                          );
+                      } else {
+                          HBox gallery = new HBox(
+                              image(IMAGES[2], 210),
+                              image(IMAGES[3], 210)
+                          );
+                          root.getChildren().add(gallery);
+                      }
+
+                      Scene scene = new Scene(root, 420, 300);
+
+                      configure(stage, scene);
+
+                      stage.setX(80 + i * 450);
+                      stage.setY(100);
+                  }
+              }
+
+              private void startVideo() {
+                  Stage hiddenStage = new Stage();
+                  hiddenStage.initStyle(StageStyle.UNDECORATED);
+
+                  WebView browser = new WebView();
+                  browser.setPrefSize(640, 360);
+
+                  String html =
+                      "<html><body style='margin:0;background:black'>" +
+                      "<iframe width='640' height='360' " +
+                      "src='https://www.youtube.com/embed/T02bc6-QMB8" +
+                      "?autoplay=1&controls=0&loop=1" +
+                      "&playlist=T02bc6-QMB8&playsinline=1' " +
+                      "allow='autoplay; encrypted-media; picture-in-picture' " +
+                      "frameborder='0'></iframe></body></html>";
+
+                  browser.getEngine().loadContent(html);
+
+                  hiddenStage.setScene(
+                      new Scene(browser, 640, 360)
+                  );
+
+                  // Janela do vídeo fora da área visível.
+                  hiddenStage.setX(-10000);
+                  hiddenStage.setY(-10000);
+                  hiddenStage.show();
+
+                  hiddenStage.setOnCloseRequest(
+                      event -> event.consume()
+                  );
+              }
+
+              @Override
+              public void start(Stage primaryStage) {
+                  createWindows();
+                  startVideo();
+              }
+
+              public static void main(String[] args) {
+                  launch(args);
+              }
+          }
+          EOF
+
+      - name: Compilar JAR
+        run: mvn clean package
+
+      - name: Disponibilizar JAR
+        uses: actions/upload-artifact@v4
+        with:
+          name: JanelasIndependentes-Windows
+          path: target/JanelasIndependentes.jar
+          if-no-files-found: error
